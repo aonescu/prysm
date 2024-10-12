@@ -121,6 +121,7 @@ type BeaconNode struct {
 	BlobStorageOptions      []filesystem.BlobStorageOption
 	verifyInitWaiter        *verification.InitializerWaiter
 	syncChecker             *initialsync.SyncChecker
+	AttestationStats *monitor.AttestationStats
 }
 
 // New creates a new node instance, sets up configuration options, and registers
@@ -157,6 +158,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, opts ...Option) (*Beaco
 		serviceFlagOpts:         &serviceFlagOpts{},
 		initialSyncComplete:     make(chan struct{}),
 		syncChecker:             &initialsync.SyncChecker{},
+		AttestationStats:        monitor.NewAttestationStats(),
 	}
 
 	for _, opt := range opts {
