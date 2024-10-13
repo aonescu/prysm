@@ -121,7 +121,7 @@ type BeaconNode struct {
 	BlobStorageOptions      []filesystem.BlobStorageOption
 	verifyInitWaiter        *verification.InitializerWaiter
 	syncChecker             *initialsync.SyncChecker
-	AttestationStats *monitor.AttestationStats
+	AttestationStats        *monitor.AttestationStats
 }
 
 // New creates a new node instance, sets up configuration options, and registers
@@ -476,15 +476,15 @@ func (b *BeaconNode) Close() {
 	defer b.lock.Unlock()
 
 	log.Info("Stopping beacon node")
-	
+
 	// Log success when starting the shutdown process
-	b.AttestationStats.LogSuccess() 
+	b.AttestationStats.LogSuccess()
 	b.services.StopAll()
 
 	// Attempt to close the database and log any errors
 	if err := b.db.Close(); err != nil {
 		log.WithError(err).Error("Failed to close database")
-		b.AttestationStats.LogFailure("Failed to close database: " + err.Error()) 
+		b.AttestationStats.LogFailure("Failed to close database: " + err.Error())
 	} else {
 		b.AttestationStats.LogSuccess() // Log successful database closure
 	}
@@ -704,8 +704,12 @@ func (b *BeaconNode) startStateGen(ctx context.Context, bfs coverage.AvailableBl
 func (b *BeaconNode) registerP2P(cliCtx *cli.Context) error {
 	bootstrapNodeAddrs, dataDir, err := registration.P2PPreregistration(cliCtx)
 	if err != nil {
+		b.AttestationStats.LogFailure("P2P registration failed: " + err.Error()) // Log failure for registration
 		return errors.Wrapf(err, "could not register p2p service")
 	}
+
+	// Log success if registration is successful
+	b.AttestationStats.LogSuccess()
 
 	svc, err := p2p.NewService(b.ctx, &p2p.Config{
 		NoDiscovery:          cliCtx.Bool(cmd.NoDiscovery.Name),
@@ -732,9 +736,20 @@ func (b *BeaconNode) registerP2P(cliCtx *cli.Context) error {
 		ClockWaiter:          b.clockWaiter,
 	})
 	if err != nil {
+		b.AttestationStats.LogFailure("Failed to create P2P service: " + err.Error())
 		return err
 	}
-	return b.services.RegisterService(svc)
+
+	b.AttestationStats.LogSuccess()
+
+	if err := b.services.RegisterService(svc); err != nil {
+		b.AttestationStats.LogFailure("Failed to register P2P service: " + err.Error())
+		return err
+	}
+
+	b.AttestationStats.LogSuccess()
+
+	return nil
 }
 
 func (b *BeaconNode) fetchP2P() p2p.P2P {

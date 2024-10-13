@@ -15,9 +15,9 @@ type AttestationStats struct {
 }
 
 func NewAttestationStats() *AttestationStats {
-    return &AttestationStats{
-        FailureReasons: make(map[string]int),
-    }
+	return &AttestationStats{
+		FailureReasons: make(map[string]int),
+	}
 }
 
 func (s *AttestationStats) LogSuccess() {
