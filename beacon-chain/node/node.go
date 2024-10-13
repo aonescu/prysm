@@ -476,13 +476,25 @@ func (b *BeaconNode) Close() {
 	defer b.lock.Unlock()
 
 	log.Info("Stopping beacon node")
+	
+	// Log success when starting the shutdown process
+	b.AttestationStats.LogSuccess() 
 	b.services.StopAll()
+
+	// Attempt to close the database and log any errors
 	if err := b.db.Close(); err != nil {
 		log.WithError(err).Error("Failed to close database")
+		b.AttestationStats.LogFailure("Failed to close database: " + err.Error()) 
+	} else {
+		b.AttestationStats.LogSuccess() // Log successful database closure
 	}
+
 	b.collector.unregister()
 	b.cancel()
 	close(b.stop)
+
+	log.Info("Beacon node stopped successfully")
+	b.AttestationStats.LogSuccess() // Log successful stop of the beacon node
 }
 
 func (b *BeaconNode) clearDB(clearDB, forceClearDB bool, d *kv.Store, dbPath string) (*kv.Store, error) {
