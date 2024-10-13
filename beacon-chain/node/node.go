@@ -769,14 +769,27 @@ func (b *BeaconNode) fetchBuilderService() *builder.Service {
 }
 
 func (b *BeaconNode) registerAttestationPool() error {
+	// Attempt to create a new attestation service
 	s, err := attestations.NewService(b.ctx, &attestations.Config{
 		Pool:                b.attestationPool,
 		InitialSyncComplete: b.initialSyncComplete,
 	})
+
+	// Log failure if there is an error during service creation
 	if err != nil {
+		b.AttestationStats.LogFailure("Failed to register attestations pool service: " + err.Error())
 		return errors.Wrap(err, "could not register atts pool service")
 	}
-	return b.services.RegisterService(s)
+
+	// Attempt to register the service
+	if err := b.services.RegisterService(s); err != nil {
+		b.AttestationStats.LogFailure("Failed to register service: " + err.Error())
+		return err
+	}
+
+	// Log success if the service is registered successfully
+	b.AttestationStats.LogSuccess()
+	return nil
 }
 
 func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *startup.ClockSynchronizer, syncComplete chan struct{}) error {
@@ -1150,8 +1163,10 @@ func (b *BeaconNode) registerValidatorMonitorService(initialSyncComplete chan st
 
 	var chainService *blockchain.Service
 	if err := b.services.FetchService(&chainService); err != nil {
+		b.AttestationStats.LogFailure("Failed to fetch chain service: " + err.Error())
 		return err
 	}
+
 	monitorConfig := &monitor.ValidatorMonitorConfig{
 		StateNotifier:       b,
 		AttestationNotifier: b,
@@ -1159,11 +1174,20 @@ func (b *BeaconNode) registerValidatorMonitorService(initialSyncComplete chan st
 		HeadFetcher:         chainService,
 		InitialSyncComplete: initialSyncComplete,
 	}
+
 	svc, err := monitor.NewService(b.ctx, monitorConfig, tracked)
 	if err != nil {
+		b.AttestationStats.LogFailure("Failed to create validator monitor service: " + err.Error())
 		return err
 	}
-	return b.services.RegisterService(svc)
+
+	if err := b.services.RegisterService(svc); err != nil {
+		b.AttestationStats.LogFailure("Failed to register validator monitor service: " + err.Error())
+		return err
+	}
+
+	b.AttestationStats.LogSuccess()
+	return nil
 }
 
 func (b *BeaconNode) registerBuilderService(cliCtx *cli.Context) error {
