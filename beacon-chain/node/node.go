@@ -422,30 +422,52 @@ func (b *BeaconNode) Start() {
 		"version": version.Version(),
 	}).Info("Starting beacon node")
 
+	// Start all registered services
 	b.services.StartAll()
+
+	// Log success if services are started successfully
+	b.AttestationStats.LogSuccess() // This increments TotalVerified
 
 	stop := b.stop
 	b.lock.Unlock()
 
 	go func() {
+		// Create a channel to capture OS interrupt signals
 		sigc := make(chan os.Signal, 1)
 		signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
 		defer signal.Stop(sigc)
+
+		// Wait for interrupt signal (SIGINT or SIGTERM)
 		<-sigc
 		log.Info("Got interrupt, shutting down...")
-		debug.Exit(b.cliCtx) // Ensure trace and CPU profile data are flushed.
+
+		// Log failure since the shutdown process is triggered by an interrupt signal
+		b.AttestationStats.LogFailure("BeaconNode shutting down due to interrupt signal")
+
+		// Ensure trace and CPU profile data are flushed
+		debug.Exit(b.cliCtx)
+
+		// Gracefully close the beacon node
 		go b.Close()
+
+		// Handle repeated interrupts during shutdown
 		for i := 10; i > 0; i-- {
 			<-sigc
 			if i > 1 {
 				log.WithField("times", i-1).Info("Already shutting down, interrupt more to panic")
 			}
 		}
+
+		// Panic if the node is not able to shut down cleanly
+		b.AttestationStats.LogFailure("BeaconNode panicked during shutdown")
 		panic("Panic closing the beacon node")
 	}()
 
-	// Wait for stop channel to be closed.
+	// Wait for the stop channel to be closed, indicating the node is fully stopped
 	<-stop
+
+	// Log failure if the node stops unexpectedly
+	b.AttestationStats.LogFailure("BeaconNode stopped unexpectedly")
 }
 
 // Close handles graceful shutdown of the system.
